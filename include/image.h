@@ -37,6 +37,7 @@ struct fdt_region;
 #define CONFIG_SHA256
 #define CONFIG_SHA384
 #define CONFIG_SHA512
+#define CONFIG_ECC
 
 #define IMAGE_ENABLE_IGNORE	0
 #define IMAGE_INDENT_STRING	""
@@ -912,6 +913,7 @@ int booti_setup(ulong image, ulong *relocated_addr, ulong *size,
 
 #define FIT_IMAGES_PATH		"/images"
 #define FIT_CONFS_PATH		"/configurations"
+#define FIT_TKC_PATH		"/trusted-key-certificate"
 
 /* hash/signature node */
 #define FIT_HASH_NODENAME	"hash"
@@ -944,6 +946,12 @@ int booti_setup(ulong image, ulong *relocated_addr, ulong *size,
 #define FIT_FPGA_PROP		"fpga"
 #define FIT_FIRMWARE_PROP	"firmware"
 #define FIT_STANDALONE_PROP	"standalone"
+
+/* trusted-key-certificate node */
+#define FIT_TKC_SIGN_PROP	"sign-value"
+#define FIT_TKC_NODENAME "trusted-key-certificate"
+#define FIT_TKC_SIGN_NODENAME	"sign-node"
+#define FIT_TKC_KEY_NODENAME	"trusted-key"
 
 #define FIT_MAX_HASH_LEN	HASH_MAX_DIGEST_SIZE
 
@@ -1022,11 +1030,12 @@ int fit_set_timestamp(void *fit, int noffset, time_t timestamp);
  * fit_add_verification_data() - add verification data to FIT image nodes
  *
  * @keydir:	Directory containing keys
- * @kwydest:	FDT blob to write public key information to
+ * @keydest:	FDT blob to write public key information to
  * @fit:	Pointer to the FIT format image header
  * @comment:	Comment to add to signature nodes
  * @require_keys: Mark all keys as 'required'
  * @engine_id:	Engine to use for signing
+ * @params: Image tool params
  *
  * Adds hash values for all component images in the FIT blob.
  * Hashes are calculated for all component images which have hash subnodes
@@ -1040,7 +1049,26 @@ int fit_set_timestamp(void *fit, int noffset, time_t timestamp);
  */
 int fit_add_verification_data(const char *keydir, void *keydest, void *fit,
 			      const char *comment, int require_keys,
-			      const char *engine_id);
+			      const char *engine_id, const void *params_ptr);
+
+/**
+ * fit_add_tkc_data() - add trusted-key-certificate data to FIT image nodes
+ *
+ * @keydir:	Directory containing keys
+ * @keydest:	FDT blob to write public key information to
+ * @fit:	Pointer to the FIT format image header
+ *
+ * Adds hash values for all component images in the FIT blob.
+ * Hashes are calculated for all component images which have hash subnodes
+ * with algorithm property set to one of the supported hash algorithms.
+ *
+ * Also add signatures if signature nodes are present.
+ *
+ * returns
+ *     0, on success
+ *     libfdt error code, on failure
+ */
+int fit_add_tkc_data(const char *keydir, void *keydest, void *fit);
 
 int fit_image_verify_with_data(const void *fit, int image_noffset,
 			       const void *data, size_t size);
@@ -1121,6 +1149,7 @@ struct image_sign_info {
 	int required_keynode;		/* Node offset of key to use: -1=any */
 	const char *require_keys;	/* Value for 'required' property */
 	const char *engine_id;		/* Engine to use for signing */
+	int tkc_tier_flag;			/* TKC tier-1 side flag */
 };
 #endif /* Allow struct image_region to always be defined for rsa.h */
 
@@ -1199,6 +1228,19 @@ struct crypto_algo {
 	int (*verify)(struct image_sign_info *info,
 		      const struct image_region region[], int region_count,
 		      uint8_t *sig, uint sig_len);
+
+	/**
+	 * add_tkc_data() - Add trusted-key-certificate data to FDT
+	 *
+	 * Add Tier-1 public key information to the FDT node, suitable for
+	 * verification at run-time. The information added depends on the
+	 * algorithm being used.
+	 *
+	 * @info:	Specifies key and FIT information
+	 * @keydest:	Destination FDT blob for public key data
+	 * @return: 0, on success, -ve on error
+	 */
+	int (*add_tkc_data)(struct image_sign_info *info, void *keydest);
 };
 
 /**

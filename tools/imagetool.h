@@ -77,6 +77,10 @@ struct image_tool_params {
 	bool quiet;		/* Don't output text in normal operation */
 	unsigned int external_offset;	/* Add padding to external data */
 	const char *engine_id;	/* Engine to use for signing */
+	int tkc_oem_flag;           /* Handle in OEM part */
+	int tkc_tier_flag;          /* Handle in Tier-1 part */
+	char *tkc_oem_pubkey_file;  /* TKC: Tier-1 need the public key of OEM */
+	char *tkc_tier_pubkey_file; /* TKC: OEM need the public key of Tier-1 */
 };
 
 /*

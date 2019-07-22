@@ -136,6 +136,58 @@ static int hash_finish_sha512(struct hash_algo *algo, void *ctx, void
 	free(ctx);
 	return 0;
 }
+
+static int hash_init_sha384(struct hash_algo *algo, void **ctxp)
+{
+	sha4_context *ctx = malloc(sizeof(sha4_context));
+	sha4_starts(ctx, 1);
+	*ctxp = ctx;
+	return 0;
+}
+
+static int hash_update_sha384(struct hash_algo *algo, void *ctx,
+			      const void *buf, unsigned int size, int is_last)
+{
+	sha4_update((sha4_context *)ctx, buf, size);
+	return 0;
+}
+
+static int hash_finish_sha384(struct hash_algo *algo, void *ctx, void
+			      *dest_buf, int size)
+{
+	if (size < algo->digest_size)
+		return -1;
+
+	sha4_finish((sha4_context *)ctx, dest_buf);
+	free(ctx);
+	return 0;
+}
+
+static int hash_init_sha512(struct hash_algo *algo, void **ctxp)
+{
+	sha4_context *ctx = malloc(sizeof(sha4_context));
+	sha4_starts(ctx, 0);
+	*ctxp = ctx;
+	return 0;
+}
+
+static int hash_update_sha512(struct hash_algo *algo, void *ctx,
+			      const void *buf, unsigned int size, int is_last)
+{
+	sha4_update((sha4_context *)ctx, buf, size);
+	return 0;
+}
+
+static int hash_finish_sha512(struct hash_algo *algo, void *ctx, void
+			      *dest_buf, int size)
+{
+	if (size < algo->digest_size)
+		return -1;
+
+	sha4_finish((sha4_context *)ctx, dest_buf);
+	free(ctx);
+	return 0;
+}
 #endif
 
 static int hash_init_crc32(struct hash_algo *algo, void **ctxp)

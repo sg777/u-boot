@@ -70,10 +70,33 @@ int rsassa_pss_sign(struct image_sign_info *info,
 		other -ve value on error
 */
 int rsa_add_verify_data(struct image_sign_info *info, void *keydest);
+
+/**
+ * add_tkc_data() - Add trusted-key-certificate information to FDT
+ *
+ * Add Tier-1 public key information to the FDT node, suitable for
+ * verification at run-time. The information added depends on the
+ * algorithm being used.
+ *
+ * @info:	Specifies key and FIT information
+ * @keydest:	Destination FDT blob for public key data
+ * @return: 0, on success, -ENOSPC if the keydest FDT blob ran out of space,
+		other -ve value on error
+*/
+int rsa_add_tkc_data(struct image_sign_info *info, void *keydest);
+
 #else
+
 static inline int rsa_sign(struct image_sign_info *info,
 		const struct image_region region[], int region_count,
 		uint8_t **sigp, uint *sig_len)
+{
+	return -ENXIO;
+}
+
+static inline int rsassa_pss_sign(struct image_sign_info *info,
+		const struct image_region region[], int region_count,
+		uint8_t *sigp, uint *sig_len)
 {
 	return -ENXIO;
 }
@@ -90,6 +113,13 @@ static inline int rsa_add_verify_data(struct image_sign_info *info,
 {
 	return -ENXIO;
 }
+
+static inline int rsa_add_tkc_data(struct image_sign_info *info,
+              void *keydest)
+{
+	return -ENXIO;
+}
+
 #endif
 
 #if IMAGE_ENABLE_VERIFY

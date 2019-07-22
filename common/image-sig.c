@@ -14,6 +14,7 @@ DECLARE_GLOBAL_DATA_PTR;
 #include <image.h>
 #include <u-boot/rsa.h>
 #include <u-boot/rsa-checksum.h>
+#include <u-boot/ecc.h>
 
 #define IMAGE_MAX_HASHED_NODES		100
 
@@ -80,6 +81,7 @@ struct crypto_algo crypto_algos[] = {
 		.sign = rsa_sign,
 		.add_verify_data = rsa_add_verify_data,
 		.verify = rsa_verify,
+		.add_tkc_data = rsa_add_tkc_data,
 	},
 	{
 		.name = "rsa3072",
@@ -89,11 +91,20 @@ struct crypto_algo crypto_algos[] = {
 		.verify = rsa_verify,
 	},
 	{
+		.name = "rsa3072",
+		.key_len = RSA3072_BYTES,
+		.sign = rsa_sign,
+		.add_verify_data = rsa_add_verify_data,
+		.verify = rsa_verify,
+		.add_tkc_data = rsa_add_tkc_data,
+	},
+	{
 		.name = "rsa4096",
 		.key_len = RSA4096_BYTES,
 		.sign = rsa_sign,
 		.add_verify_data = rsa_add_verify_data,
 		.verify = rsa_verify,
+		.add_tkc_data = rsa_add_tkc_data,
 	},
 	{
 		.name = "rsassa-pss2048",
@@ -101,6 +112,7 @@ struct crypto_algo crypto_algos[] = {
 		.sign = rsassa_pss_sign,
 		.add_verify_data = rsa_add_verify_data,
 		.verify = rsa_verify,
+		.add_tkc_data = rsa_add_tkc_data,
 	},
 	{
 		.name = "rsassa-pss3072",
@@ -108,6 +120,7 @@ struct crypto_algo crypto_algos[] = {
 		.sign = rsassa_pss_sign,
 		.add_verify_data = rsa_add_verify_data,
 		.verify = rsa_verify,
+		.add_tkc_data = rsa_add_tkc_data,
 	},
 	{
 		.name = "rsassa-pss4096",
@@ -115,8 +128,32 @@ struct crypto_algo crypto_algos[] = {
 		.sign = rsassa_pss_sign,
 		.add_verify_data = rsa_add_verify_data,
 		.verify = rsa_verify,
+		.add_tkc_data = rsa_add_tkc_data,
+	},
+	{
+		.name = "nistp256",
+		.key_len = ECC256_BYTES,
+		.sign = ecc_sign,
+		.add_verify_data = ecc_add_verify_data,
+		.verify = ecc_verify,
+		.add_tkc_data = ecc_add_tkc_data,
+	},
+	{
+		.name = "nistp384",
+		.key_len = ECC384_BYTES,
+		.sign = ecc_sign,
+		.add_verify_data = ecc_add_verify_data,
+		.verify = ecc_verify,
+		.add_tkc_data = ecc_add_tkc_data,
+	},
+	{
+		.name = "nistp521",
+		.key_len = ECC521_BYTES,
+		.sign = ecc_sign,
+		.add_verify_data = ecc_add_verify_data,
+		.verify = ecc_verify,
+		.add_tkc_data = ecc_add_tkc_data,
 	}
-
 };
 
 struct checksum_algo *image_get_checksum_algo(const char *full_name)

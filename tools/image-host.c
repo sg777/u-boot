@@ -195,12 +195,14 @@ static int fit_image_setup_sig(struct image_sign_info *info,
  * @comment:	Comment to add to signature nodes
  * @require_keys: Mark all keys as 'required'
  * @engine_id:	Engine to use for signing
+ * @params:	Image tool params
  * @return 0 if ok, -1 on error
  */
 static int fit_image_process_sig(const char *keydir, void *keydest,
 		void *fit, const char *image_name,
 		int noffset, const void *data, size_t size,
-		const char *comment, int require_keys, const char *engine_id)
+		const char *comment, int require_keys, const char *engine_id,
+		const struct image_tool_params *params)
 {
 	struct image_sign_info info;
 	struct image_region region;
@@ -240,6 +242,7 @@ static int fit_image_process_sig(const char *keydir, void *keydest,
 
 	/* Get keyname again, as FDT has changed and invalidated our pointer */
 	info.keyname = fdt_getprop(fit, noffset, "key-name-hint", NULL);
+	info.tkc_tier_flag = params->tkc_tier_flag;
 
 	/*
 	 * Write the public key into the supplied FDT file; this might fail
@@ -291,11 +294,12 @@ static int fit_image_process_sig(const char *keydir, void *keydest,
  * @comment:	Comment to add to signature nodes
  * @require_keys: Mark all keys as 'required'
  * @engine_id:	Engine to use for signing
+ * @params:	Image tool params
  * @return: 0 on success, <0 on failure
  */
 int fit_image_add_verification_data(const char *keydir, void *keydest,
 		void *fit, int image_noffset, const char *comment,
-		int require_keys, const char *engine_id)
+		int require_keys, const char *engine_id, const struct image_tool_params *params)
 {
 	const char *image_name;
 	const void *data;
@@ -332,7 +336,7 @@ int fit_image_add_verification_data(const char *keydir, void *keydest,
 				strlen(FIT_SIG_NODENAME))) {
 			ret = fit_image_process_sig(keydir, keydest,
 				fit, image_name, noffset, data, size,
-				comment, require_keys, engine_id);
+				comment, require_keys, engine_id, params);
 		}
 		if (ret)
 			return ret;
@@ -573,7 +577,7 @@ static int fit_config_get_data(void *fit, int conf_noffset, int noffset,
 static int fit_config_process_sig(const char *keydir, void *keydest,
 		void *fit, const char *conf_name, int conf_noffset,
 		int noffset, const char *comment, int require_keys,
-		const char *engine_id)
+		const char *engine_id, const struct image_tool_params *params)
 {
 	struct image_sign_info info;
 	const char *node_name;
@@ -621,6 +625,7 @@ static int fit_config_process_sig(const char *keydir, void *keydest,
 
 	/* Get keyname again, as FDT has changed and invalidated our pointer */
 	info.keyname = fdt_getprop(fit, noffset, "key-name-hint", NULL);
+	info.tkc_tier_flag = params->tkc_tier_flag;
 
 	/* Write the public key into the supplied FDT file */
 	if (keydest) {
@@ -637,7 +642,8 @@ static int fit_config_process_sig(const char *keydir, void *keydest,
 
 static int fit_config_add_verification_data(const char *keydir, void *keydest,
 		void *fit, int conf_noffset, const char *comment,
-		int require_keys, const char *engine_id)
+		int require_keys, const char *engine_id,
+		const struct image_tool_params *params)
 {
 	const char *conf_name;
 	int noffset;
@@ -656,7 +662,7 @@ static int fit_config_add_verification_data(const char *keydir, void *keydest,
 			     strlen(FIT_SIG_NODENAME))) {
 			ret = fit_config_process_sig(keydir, keydest,
 				fit, conf_name, conf_noffset, noffset, comment,
-				require_keys, engine_id);
+				require_keys, engine_id, params);
 		}
 		if (ret)
 			return ret;
@@ -667,11 +673,12 @@ static int fit_config_add_verification_data(const char *keydir, void *keydest,
 
 int fit_add_verification_data(const char *keydir, void *keydest, void *fit,
 			      const char *comment, int require_keys,
-			      const char *engine_id)
+			      const char *engine_id, const void *param_ptr)
 {
 	int images_noffset, confs_noffset;
 	int noffset;
 	int ret;
+	const struct image_tool_params *params = (const struct image_tool_params *)param_ptr;
 
 	/* Find images parent node offset */
 	images_noffset = fdt_path_offset(fit, FIT_IMAGES_PATH);
@@ -690,7 +697,7 @@ int fit_add_verification_data(const char *keydir, void *keydest, void *fit,
 		 * i.e. component image node.
 		 */
 		ret = fit_image_add_verification_data(keydir, keydest,
-				fit, noffset, comment, require_keys, engine_id);
+				fit, noffset, comment, require_keys, engine_id, params);
 		if (ret)
 			return ret;
 	}
@@ -714,9 +721,214 @@ int fit_add_verification_data(const char *keydir, void *keydest, void *fit,
 		ret = fit_config_add_verification_data(keydir, keydest,
 						       fit, noffset, comment,
 						       require_keys,
-						       engine_id);
+						       engine_id, params);
+		if (ret) {
+			return ret;
+		}
+	}
+
+	return 0;
+}
+
+/*
+	Only handle the two nodes
+		/trusted-key-certificate/sign-node and
+		/trusted-key-certificate/sign-node/trusted-key
+	Refer to fit_config_check_sig
+*/
+static int fit_tkc_get_hash_data(void *fit,
+		struct image_region **regionp, int *region_countp)
+{
+	int count = 2;
+	char node_name_0[] = "/trusted-key-certificate/sign-node";
+	char node_name_1[] = "/trusted-key-certificate/sign-node/trusted-key";
+	char *node_inc[] = {node_name_0, node_name_1};
+	int max_regions;
+	char path[200];
+	char * const exc_prop[] = {"data"};
+	struct image_region *region;
+
+	/*
+	 * Each node can generate one region for each sub-node.
+	 */
+	max_regions = 20;
+	struct fdt_region fdt_regions[max_regions];
+
+	/* Get a list of regions to hash */
+	count = fdt_find_regions(fit, node_inc, count,
+			exc_prop, ARRAY_SIZE(exc_prop),
+			fdt_regions, max_regions - 1,
+			path, sizeof(path), 0);
+
+	if (count < 0) {
+		fprintf(stderr, "Failed to hash node\n");
+		return -1;
+	}
+	if (count == 0) {
+		fprintf(stderr, "No data to hash\n");
+		return -1;
+	}
+	if (count >= max_regions - 1) {
+		fprintf(stderr, "Too many hash regions\n");
+		return -1;
+	}
+
+	/* Build our list of data blocks */
+	region = fit_region_make_list(fit, fdt_regions, count, NULL);
+	if (!region) {
+		printf("Out of memory hashing TKC node\n");
+		return -ENOMEM;
+	}
+
+	*region_countp = count;
+	*regionp = region;
+
+	return 0;
+}
+
+static int fit_tkc_add_verification_data(const char *keydir, void *keydest,
+		void *fit, int tkc_noffset, struct image_sign_info *info)
+{
+	int noffset;
+	int ret = 0;
+	struct image_region *region = NULL;
+	int region_count;
+	uint8_t *value;
+	uint value_len;
+
+	/* If there are no keys, we can't sign configurations */
+	if (!IMAGE_ENABLE_SIGN || !keydir) {
+		return 0;
+	}
+
+	/* Process all subnodes of the sign-node node */
+	for (noffset = fdt_first_subnode(fit, tkc_noffset);
+	     noffset >= 0;
+	     noffset = fdt_next_subnode(fit, noffset)) {
+		const char *node_name;
+
+		node_name = fit_get_name(fit, noffset, NULL);
+
+		if (!strncmp(node_name, FIT_TKC_KEY_NODENAME,
+			     strlen(FIT_TKC_KEY_NODENAME))) {
+			if (keydest) {
+				ret = info->crypto->add_tkc_data(info, keydest);
+			}
+		}
+
+		if (ret) {
+			printf("Can't add TKC data\n");
+			return ret;
+		}
+	}
+
+	/* Calculate the hash of
+		/trusted-key-certificate/sign-node and
+		/trusted-key-certificate/sign-node/trusted-key */
+	/* Sign */
+	ret = fit_tkc_get_hash_data(fit, &region, &region_count);
+	if (ret) {
+		printf("Can't get TKC hash data\n");
+		return ret;
+	}
+
+	ret = info->crypto->sign(info, region, region_count, &value, &value_len);
+	if (ret) {
+		printf("Can't sign TKC node\n");
+		return ret;
+	}
+
+	/* Put into /trusted-key-certificate/ */
+	if (keydest) {
+		// keydest. The sign-value is not the final one.
+		noffset = fdt_subnode_offset(keydest, 0, FIT_TKC_NODENAME);
+		ret = fdt_setprop(keydest, noffset, FIT_TKC_SIGN_PROP, value, value_len);
+	} else {
+		// Write to fit
+		noffset = fdt_subnode_offset(fit, 0, FIT_TKC_NODENAME);
+		ret = fdt_setprop(fit, noffset, FIT_TKC_SIGN_PROP, value, value_len);
+	}
+
+	free(value);
+	free(region);
+
+	if (ret) {
+		printf("Can't write TKC sign\n");
+		return ret;
+	}
+
+	return ret;
+}
+
+static int fit_config_get_sign_info(const char *keydir,
+		void *fit, int conf_noffset, struct image_sign_info *info)
+{
+	int noffset;
+
+	/* Process all hash subnodes of the configuration node */
+	for (noffset = fdt_first_subnode(fit, conf_noffset);
+	     noffset >= 0;
+	     noffset = fdt_next_subnode(fit, noffset)) {
+		const char *node_name;
+		int ret = 0;
+
+		node_name = fit_get_name(fit, noffset, NULL);
+		if (!strncmp(node_name, FIT_SIG_NODENAME,
+			     strlen(FIT_SIG_NODENAME))) {
+			ret = fit_image_setup_sig(info, keydir, fit, node_name, noffset,
+				NULL, NULL);
+		}
 		if (ret)
 			return ret;
+	}
+
+	return 0;
+}
+
+int fit_add_tkc_data(const char *keydir, void *keydest, void *fit)
+{
+	struct image_sign_info info;
+	int tkc_noffset, confs_noffset;
+	int noffset;
+	int ret;
+
+	/* Find configurations parent node offset */
+	confs_noffset = fdt_path_offset(fit, FIT_CONFS_PATH);
+	if (confs_noffset < 0) {
+		printf("Can't find configurations parent node '%s' (%s)\n",
+		       FIT_CONFS_PATH, fdt_strerror(confs_noffset));
+		return -ENOENT;
+	}
+
+	/* Find trusted-key-certificate parent node offset */
+	tkc_noffset = fdt_path_offset(fit, FIT_TKC_PATH);
+	if (tkc_noffset < 0) {
+		printf("Can't find TKC parent node '%s' (%s)\n",
+		       FIT_TKC_PATH, fdt_strerror(tkc_noffset));
+		return -ENOENT;
+	}
+
+	/* To get info from configuration */
+	/* Process its subnodes, print out component images details */
+	for (noffset = fdt_first_subnode(fit, confs_noffset);
+	     noffset >= 0;
+	     noffset = fdt_next_subnode(fit, noffset)) {
+		ret = fit_config_get_sign_info(keydir,
+						       fit, noffset, &info);
+		if (ret) {
+			return ret;
+		}
+	}
+
+	/* Process its subnodes, print out component details */
+	for (noffset = fdt_first_subnode(fit, tkc_noffset);
+	     noffset >= 0;
+	     noffset = fdt_next_subnode(fit, noffset)) {
+		ret = fit_tkc_add_verification_data(keydir, keydest,
+						       fit, noffset, &info);
+		if (ret) {
+			return ret;
+		}
 	}
 
 	return 0;

@@ -97,7 +97,7 @@ static void usage(const char *msg)
 		"          -i => input filename for ramdisk file\n");
 #ifdef CONFIG_FIT_SIGNATURE
 	fprintf(stderr,
-		"Signing / verified boot options: [-E] [-k keydir] [-K dtb] [ -c <comment>] [-p addr] [-r] [-N engine]\n"
+		"Signing / verified boot options: [-E] [-k keydir] [-K dtb] [ -c <comment>] [-p addr] [-r] [-N engine] [-g Tier_pubkey] [-u OEM_pubkey]\n"
 		"          -E => place data outside of the FIT structure\n"
 		"          -k => set directory containing private keys\n"
 		"          -K => write public keys to this .dtb file\n"
@@ -105,7 +105,9 @@ static void usage(const char *msg)
 		"          -F => re-sign existing FIT image\n"
 		"          -p => place external data at a static position\n"
 		"          -r => mark keys used as 'required' in dtb\n"
-		"          -N => engine to use for signing (pkcs11)\n");
+		"          -N => engine to use for signing (pkcs11)\n"
+		"          -g => indicate to handle TKC in OEM part\n"
+		"          -u => indicate to handle TKC in Tier-1 part\n");
 #else
 	fprintf(stderr,
 		"Signing / verified boot not supported (CONFIG_FIT_SIGNATURE undefined)\n");
@@ -143,7 +145,7 @@ static void process_args(int argc, char **argv)
 	int opt;
 
 	while ((opt = getopt(argc, argv,
-			     "a:A:b:c:C:d:D:e:Ef:Fk:i:K:ln:N:p:O:rR:qsT:vVx")) != -1) {
+			     "a:A:b:c:C:d:D:e:Ef:Fk:g:i:K:ln:N:p:O:rR:qsT:u:vVx")) != -1) {
 		switch (opt) {
 		case 'a':
 			params.addr = strtoull(optarg, &ptr, 16);
@@ -209,6 +211,10 @@ static void process_args(int argc, char **argv)
 			params.type = IH_TYPE_FLATDT;
 			params.fflag = 1;
 			break;
+		case 'g':
+			params.tkc_oem_flag = 1;
+			params.tkc_tier_pubkey_file = optarg;
+			break;
 		case 'i':
 			params.fit_ramdisk = optarg;
 			break;
@@ -268,6 +274,10 @@ static void process_args(int argc, char **argv)
 				show_valid_options(IH_TYPE);
 				usage("Invalid image type");
 			}
+			break;
+		case 'u':
+			params.tkc_tier_flag = 1;
+			params.tkc_oem_pubkey_file = optarg;
 			break;
 		case 'v':
 			params.vflag++;

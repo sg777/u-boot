@@ -271,6 +271,7 @@ config FIT_SIGNATURE
 	depends on DM
 	select RSA
 	select HASH
+	select ECC
 	help
 	  This option enables signature verification of FIT uImages,
 	  using a hash signed and verified using RSA. If

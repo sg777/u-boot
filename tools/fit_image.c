@@ -56,10 +56,16 @@ static int fit_add_file_data(struct image_tool_params *params, size_t size_inc,
 	}
 
 	if (!ret) {
+		if (params->tkc_oem_flag) {
+			ret = fit_add_tkc_data(params->keydir, dest_blob, ptr);
+		}
+	}
+
+	if (!ret) {
 		ret = fit_add_verification_data(params->keydir, dest_blob, ptr,
 						params->comment,
 						params->require_keys,
-						params->engine_id);
+						params->engine_id, params);
 	}
 
 	if (dest_blob) {
@@ -678,7 +684,7 @@ static int fit_handle_file(struct image_tool_params *params)
 	 * would be considerably more complex to implement. Generally a few
 	 * steps of this loop is enough to sign with several keys.
 	 */
-	for (size_inc = 0; size_inc < 64 * 1024; size_inc += 1024) {
+	for (size_inc = 0; size_inc < 64 * 1024; size_inc += 2048) {
 		ret = fit_add_file_data(params, size_inc, tmpfile);
 		if (!ret || ret != -ENOSPC)
 			break;

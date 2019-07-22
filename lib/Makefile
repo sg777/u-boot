@@ -50,9 +50,12 @@ endif
 
 obj-$(CONFIG_RSA) += rsa/
 obj-$(CONFIG_SHA1) += sha1.o
+obj-$(CONFIG_SHA1) += sha4.o
 obj-$(CONFIG_SHA256) += sha256.o
 obj-$(CONFIG_SHA384) += sha384.o
 obj-$(CONFIG_SHA512) += sha512.o
+
+obj-$(CONFIG_ECC) += ecc/
 
 obj-$(CONFIG_$(SPL_)ZLIB) += zlib/
 obj-$(CONFIG_$(SPL_)GZIP) += gunzip.o

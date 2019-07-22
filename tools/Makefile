@@ -75,6 +75,9 @@ RSA_OBJS-$(CONFIG_FIT_SIGNATURE) := $(addprefix lib/rsa/, \
 					rsa-sign.o rsa-verify.o rsa-checksum.o \
 					rsa-mod-exp.o)
 
+ECC_OBJS-$(CONFIG_ECC) := $(addprefix lib/ecc/, \
+          ecc-sig.o ecc-verify.o)
+
 ROCKCHIP_OBS = lib/rc4.o rkcommon.o rkimage.o rksd.o rkspi.o
 
 # common objs for dumpimage and mkimage
@@ -116,7 +119,8 @@ dumpimage-mkimage-objs := aisimage.o \
 			$(LIBFDT_OBJS) \
 			gpimage.o \
 			gpimage-common.o \
-			$(RSA_OBJS-y)
+			$(RSA_OBJS-y) \
+			$(ECC_OBJS-y)
 
 dumpimage-objs := $(dumpimage-mkimage-objs) dumpimage.o
 mkimage-objs   := $(dumpimage-mkimage-objs) mkimage.o
@@ -155,6 +159,7 @@ ifeq ($(HOSTOS),darwin)
 HOSTCFLAGS_mxsimage.o += -Wno-deprecated-declarations
 HOSTCFLAGS_image-sig.o += -Wno-deprecated-declarations
 HOSTCFLAGS_rsa-sign.o += -Wno-deprecated-declarations
+HOSTCFLAGS_ecc-sig.o += -Wno-deprecated-declarations
 endif
 endif
 
