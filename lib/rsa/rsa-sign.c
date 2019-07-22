@@ -977,3 +977,118 @@ err_get_pub_key:
 
 	return ret;
 }
+
+int rsa_add_tkc_data(struct image_sign_info *info, void *keydest)
+{
+	BIGNUM *modulus, *r_squared;
+	uint64_t exponent;
+	BIGNUM *n0_inv;
+	int bits;
+	RSA *rsa;
+	ENGINE *e = NULL;
+
+	int tkc_parent, sign_node, key_node;
+	int ret;
+
+	debug("%s: Getting verification data\n", __func__);
+	if (info->engine_id) {
+		ret = rsa_engine_init(info->engine_id, &e);
+		if (ret)
+			return ret;
+	}
+
+	ret = rsa_get_pub_key(info->keydir, "tier_public", e, &rsa);
+	if (ret)
+		goto err_get_pub_key;
+	ret = rsa_get_params(rsa, &exponent, &n0_inv, &modulus, &r_squared);
+	if (ret)
+		goto err_get_params;
+	bits = BN_num_bits(modulus);
+
+	// Step 1: detect trusted-key-certificate node
+	// if not found, then create it
+	tkc_parent = fdt_subnode_offset(keydest, 0, FIT_TKC_NODENAME);
+	if (tkc_parent == -FDT_ERR_NOTFOUND) {
+		tkc_parent = fdt_add_subnode(keydest, 0, FIT_TKC_NODENAME);
+		if (tkc_parent < 0) {
+			ret = tkc_parent;
+			if (ret != -FDT_ERR_NOSPACE) {
+				fprintf(stderr, "Couldn't create trusted-key-certificate node: %s\n",
+					fdt_strerror(tkc_parent));
+			}
+		}
+	}
+	if (ret)
+		goto done;
+
+	// Step 2: detect sign-node node
+	// if not found, then create it
+	sign_node = fdt_subnode_offset(keydest, tkc_parent, FIT_TKC_SIGN_NODENAME);
+	if (sign_node == -FDT_ERR_NOTFOUND) {
+		sign_node = fdt_add_subnode(keydest, tkc_parent, FIT_TKC_SIGN_NODENAME);
+		if (sign_node < 0) {
+			ret = sign_node;
+			if (ret != -FDT_ERR_NOSPACE) {
+				fprintf(stderr, "Could not create sign-node subnode: %s\n",
+					fdt_strerror(sign_node));
+			}
+		}
+	}
+	if (ret)
+		goto done;
+
+	// Step 3: detect trusted-key node
+	// if not found, then create it
+	key_node = fdt_subnode_offset(keydest, sign_node, FIT_TKC_KEY_NODENAME);
+	if (key_node == -FDT_ERR_NOTFOUND) {
+		key_node = fdt_add_subnode(keydest, sign_node, FIT_TKC_KEY_NODENAME);
+		if (key_node < 0) {
+			ret = key_node;
+			if (ret != -FDT_ERR_NOSPACE) {
+				fprintf(stderr, "Could not create trusted-key subnode: %s\n",
+					fdt_strerror(key_node));
+			}
+		}
+	}
+	if (ret)
+		goto done;
+
+	if (!ret)
+		ret = fdt_setprop_u32(keydest, key_node, "rsa,num-bits", bits);
+	if (!ret)
+		ret = fdt_add_bignum(keydest, key_node, "rsa,n0-inverse", n0_inv,
+				     64);
+	if (!ret) {
+		ret = fdt_setprop_u64(keydest, key_node, "rsa,exponent", exponent);
+	}
+	if (!ret) {
+		ret = fdt_add_bignum(keydest, key_node, "rsa,modulus", modulus,
+				     bits);
+	}
+	if (!ret) {
+		ret = fdt_add_bignum(keydest, key_node, "rsa,r-squared", r_squared,
+				     bits);
+	}
+	if (!ret) {
+		ret = fdt_setprop_string(keydest, key_node, FIT_ALGO_PROP,
+					 info->name);
+	}
+	if (!ret && info->require_keys) {
+		ret = fdt_setprop_string(keydest, key_node, "required",
+					 info->require_keys);
+	}
+
+done:
+	BN_free(modulus);
+	BN_free(r_squared);
+	BN_free(n0_inv);
+	if (ret)
+		ret = ret == -FDT_ERR_NOSPACE ? -ENOSPC : -EIO;
+err_get_params:
+	RSA_free(rsa);
+err_get_pub_key:
+	if (info->engine_id)
+		rsa_engine_remove(e);
+
+	return ret;
+}

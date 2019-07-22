@@ -934,6 +934,55 @@ int fit_add_tkc_data(const char *keydir, void *keydest, void *fit)
 	return 0;
 }
 
+int fit_add_tkc_data(const char *keydir, void *keydest, void *fit)
+{
+	struct image_sign_info info;
+	int tkc_noffset, confs_noffset;
+	int noffset;
+	int ret;
+
+	/* Find configurations parent node offset */
+	confs_noffset = fdt_path_offset(fit, FIT_CONFS_PATH);
+	if (confs_noffset < 0) {
+		printf("Can't find configurations parent node '%s' (%s)\n",
+		       FIT_CONFS_PATH, fdt_strerror(confs_noffset));
+		return -ENOENT;
+	}
+
+	/* Find trusted-key-certificate parent node offset */
+	tkc_noffset = fdt_path_offset(fit, FIT_TKC_PATH);
+	if (tkc_noffset < 0) {
+		printf("Can't find TKC parent node '%s' (%s)\n",
+		       FIT_TKC_PATH, fdt_strerror(tkc_noffset));
+		return -ENOENT;
+	}
+
+	/* To get info from configuration */
+	/* Process its subnodes, print out component images details */
+	for (noffset = fdt_first_subnode(fit, confs_noffset);
+	     noffset >= 0;
+	     noffset = fdt_next_subnode(fit, noffset)) {
+		ret = fit_config_get_sign_info(keydir,
+						       fit, noffset, &info);
+		if (ret) {
+			return ret;
+		}
+	}
+
+	/* Process its subnodes, print out component details */
+	for (noffset = fdt_first_subnode(fit, tkc_noffset);
+	     noffset >= 0;
+	     noffset = fdt_next_subnode(fit, noffset)) {
+		ret = fit_tkc_add_verification_data(keydir, keydest,
+						       fit, noffset, &info);
+		if (ret) {
+			return ret;
+		}
+	}
+
+	return 0;
+}
+
 #ifdef CONFIG_FIT_SIGNATURE
 int fit_check_sign(const void *fit, const void *key)
 {
