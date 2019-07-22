@@ -53,6 +53,10 @@ int rsa_sign(struct image_sign_info *info,
 	     const struct image_region region[],
 	     int region_count, uint8_t **sigp, uint *sig_len);
 
+int rsassa_pss_sign(struct image_sign_info *info,
+		    const struct image_region region[],
+		    int region_count, uint8_t **sigp, uint *sig_len);
+
 /**
  * add_verify_data() - Add verification information to FDT
  *
@@ -70,6 +74,13 @@ int rsa_add_verify_data(struct image_sign_info *info, void *keydest);
 static inline int rsa_sign(struct image_sign_info *info,
 		const struct image_region region[], int region_count,
 		uint8_t **sigp, uint *sig_len)
+{
+	return -ENXIO;
+}
+
+static inline int rsassa_pss_sign(struct image_sign_info *info,
+		const struct image_region region[], int region_count,
+		uint8_t *sigp, uint *sig_len)
 {
 	return -ENXIO;
 }
@@ -107,6 +118,7 @@ static inline int rsa_verify(struct image_sign_info *info,
 #endif
 
 #define RSA2048_BYTES	(2048 / 8)
+#define RSA3072_BYTES	(3072 / 8)
 #define RSA4096_BYTES	(4096 / 8)
 
 /* This is the minimum/maximum key size we support, in bits */

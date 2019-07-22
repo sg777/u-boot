@@ -49,6 +49,26 @@ struct checksum_algo checksum_algos[] = {
 		.calculate_sign = EVP_sha256,
 #endif
 		.calculate = hash_calculate,
+	},
+	{
+		.name = "sha384",
+		.checksum_len = SHA384_SUM_LEN,
+		.der_len = SHA384_DER_LEN,
+		.der_prefix = sha384_der_prefix,
+#if IMAGE_ENABLE_SIGN
+		.calculate_sign = EVP_sha384,
+#endif
+		.calculate = hash_calculate,
+	},
+	{
+		.name = "sha512",
+		.checksum_len = SHA512_SUM_LEN,
+		.der_len = SHA512_DER_LEN,
+		.der_prefix = sha512_der_prefix,
+#if IMAGE_ENABLE_SIGN
+		.calculate_sign = EVP_sha512,
+#endif
+		.calculate = hash_calculate,
 	}
 
 };
@@ -62,9 +82,37 @@ struct crypto_algo crypto_algos[] = {
 		.verify = rsa_verify,
 	},
 	{
+		.name = "rsa3072",
+		.key_len = RSA3072_BYTES,
+		.sign = rsa_sign,
+		.add_verify_data = rsa_add_verify_data,
+		.verify = rsa_verify,
+	},
+	{
 		.name = "rsa4096",
 		.key_len = RSA4096_BYTES,
 		.sign = rsa_sign,
+		.add_verify_data = rsa_add_verify_data,
+		.verify = rsa_verify,
+	},
+	{
+		.name = "rsassa-pss2048",
+		.key_len = RSA2048_BYTES,
+		.sign = rsassa_pss_sign,
+		.add_verify_data = rsa_add_verify_data,
+		.verify = rsa_verify,
+	},
+	{
+		.name = "rsassa-pss3072",
+		.key_len = RSA3072_BYTES,
+		.sign = rsassa_pss_sign,
+		.add_verify_data = rsa_add_verify_data,
+		.verify = rsa_verify,
+	},
+	{
+		.name = "rsassa-pss4096",
+		.key_len = RSA4096_BYTES,
+		.sign = rsassa_pss_sign,
 		.add_verify_data = rsa_add_verify_data,
 		.verify = rsa_verify,
 	}

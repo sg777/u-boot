@@ -97,6 +97,7 @@ int fdt_find_regions(const void *fdt, char * const inc[], int inc_count,
 
 		case FDT_END_NODE:
 			include = want;
+			stop_at = offset;
 			want = stack[depth--];
 			while (end > path && *--end != '/')
 				;

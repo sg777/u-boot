@@ -27,6 +27,7 @@
 #include <u-boot/crc.h>
 #include <u-boot/sha1.h>
 #include <u-boot/sha256.h>
+#include <u-boot/sha4.h>
 #include <u-boot/md5.h>
 
 #if defined(CONFIG_SHA1) && !defined(CONFIG_SHA_PROG_HW_ACCEL)
@@ -80,6 +81,58 @@ static int hash_finish_sha256(struct hash_algo *algo, void *ctx, void
 		return -1;
 
 	sha256_finish((sha256_context *)ctx, dest_buf);
+	free(ctx);
+	return 0;
+}
+
+static int hash_init_sha384(struct hash_algo *algo, void **ctxp)
+{
+	sha4_context *ctx = malloc(sizeof(sha4_context));
+	sha4_starts(ctx, 1);
+	*ctxp = ctx;
+	return 0;
+}
+
+static int hash_update_sha384(struct hash_algo *algo, void *ctx,
+			      const void *buf, unsigned int size, int is_last)
+{
+	sha4_update((sha4_context *)ctx, buf, size);
+	return 0;
+}
+
+static int hash_finish_sha384(struct hash_algo *algo, void *ctx, void
+			      *dest_buf, int size)
+{
+	if (size < algo->digest_size)
+		return -1;
+
+	sha4_finish((sha4_context *)ctx, dest_buf);
+	free(ctx);
+	return 0;
+}
+
+static int hash_init_sha512(struct hash_algo *algo, void **ctxp)
+{
+	sha4_context *ctx = malloc(sizeof(sha4_context));
+	sha4_starts(ctx, 0);
+	*ctxp = ctx;
+	return 0;
+}
+
+static int hash_update_sha512(struct hash_algo *algo, void *ctx,
+			      const void *buf, unsigned int size, int is_last)
+{
+	sha4_update((sha4_context *)ctx, buf, size);
+	return 0;
+}
+
+static int hash_finish_sha512(struct hash_algo *algo, void *ctx, void
+			      *dest_buf, int size)
+{
+	if (size < algo->digest_size)
+		return -1;
+
+	sha4_finish((sha4_context *)ctx, dest_buf);
 	free(ctx);
 	return 0;
 }
@@ -159,6 +212,28 @@ static struct hash_algo hash_algo[] = {
 #endif
 	},
 #endif
+#ifdef CONFIG_SHA384
+	{
+		.name		= "sha384",
+		.digest_size	= SHA384_SUM_LEN,
+		.chunk_size	= CHUNKSZ_SHA384,
+		.hash_func_ws	= sha384_csum_wd,
+		.hash_init	= hash_init_sha384,
+		.hash_update	= hash_update_sha384,
+		.hash_finish	= hash_finish_sha384,
+	},
+#endif
+#ifdef CONFIG_SHA512
+	{
+		.name		= "sha512",
+		.digest_size	= SHA512_SUM_LEN,
+		.chunk_size	= CHUNKSZ_SHA512,
+		.hash_func_ws	= sha512_csum_wd,
+		.hash_init	= hash_init_sha512,
+		.hash_update	= hash_update_sha512,
+		.hash_finish	= hash_finish_sha512,
+       },
+#endif
 	{
 		.name		= "crc32",
 		.digest_size	= 4,
@@ -171,7 +246,8 @@ static struct hash_algo hash_algo[] = {
 };
 
 /* Try to minimize code size for boards that don't want much hashing */
-#if defined(CONFIG_SHA256) || defined(CONFIG_CMD_SHA1SUM) || \
+#if defined(CONFIG_SHA256) || defined(CONFIG_SHA384) || \
+	defined(CONFIG_SHA512) || defined(CONFIG_CMD_SHA1SUM) || \
 	defined(CONFIG_CRC32_VERIFY) || defined(CONFIG_CMD_HASH)
 #define multi_hash()	1
 #else

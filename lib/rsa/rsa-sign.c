@@ -384,9 +384,10 @@ static void rsa_engine_remove(ENGINE *e)
 
 static int rsa_sign_with_key(RSA *rsa, struct checksum_algo *checksum_algo,
 		const struct image_region region[], int region_count,
-		uint8_t **sigp, uint *sig_size)
+		uint8_t **sigp, uint *sig_size, int pad)
 {
 	EVP_PKEY *key;
+	EVP_PKEY_CTX *keyctx;
 	EVP_MD_CTX *context;
 	int size, ret = 0;
 	uint8_t *sig;
@@ -398,6 +399,12 @@ static int rsa_sign_with_key(RSA *rsa, struct checksum_algo *checksum_algo,
 
 	if (!EVP_PKEY_set1_RSA(key, rsa)) {
 		ret = rsa_err("EVP key setup failed");
+		goto err_set;
+	}
+
+	keyctx = EVP_PKEY_CTX_new(key, NULL);
+	if (!keyctx) {
+		ret = rsa_err("EVP_PKEY_CTX object creation failed");
 		goto err_set;
 	}
 
@@ -416,19 +423,34 @@ static int rsa_sign_with_key(RSA *rsa, struct checksum_algo *checksum_algo,
 		goto err_create;
 	}
 	EVP_MD_CTX_init(context);
-	if (!EVP_SignInit(context, checksum_algo->calculate_sign())) {
+	if (!EVP_DigestSignInit(context, &keyctx,
+				checksum_algo->calculate_sign(), NULL, key)) {
 		ret = rsa_err("Signer setup failed");
 		goto err_sign;
 	}
 
+	if (pad == RSA_PKCS1_PSS_PADDING) {
+		if (!EVP_PKEY_CTX_set_rsa_padding(keyctx,
+						  RSA_PKCS1_PSS_PADDING)) {
+			ret = rsa_err("EVP key setup padding failed");
+			goto err_set;
+		}
+
+		if (!EVP_PKEY_CTX_set_rsa_pss_saltlen(keyctx, -1)) {
+			ret = rsa_err("EVP key setup saltlen failed");
+			goto err_set;
+		}
+	}
+
 	for (i = 0; i < region_count; i++) {
-		if (!EVP_SignUpdate(context, region[i].data, region[i].size)) {
+		if (!EVP_DigestSignUpdate(context, region[i].data,
+					  region[i].size)) {
 			ret = rsa_err("Signing data failed");
 			goto err_sign;
 		}
 	}
 
-	if (!EVP_SignFinal(context, sig, sig_size, key)) {
+	if (!EVP_DigestSignFinal(context, sig, (size_t *)sig_size)) {
 		ret = rsa_err("Could not obtain signature");
 		goto err_sign;
 	}
@@ -478,7 +500,51 @@ int rsa_sign(struct image_sign_info *info,
 	if (ret)
 		goto err_priv;
 	ret = rsa_sign_with_key(rsa, info->checksum, region,
-				region_count, sigp, sig_len);
+				region_count, sigp, sig_len, RSA_PKCS1_PADDING);
+	if (ret)
+		goto err_sign;
+
+	RSA_free(rsa);
+	if (info->engine_id)
+		rsa_engine_remove(e);
+	rsa_remove();
+
+	return ret;
+
+err_sign:
+	RSA_free(rsa);
+err_priv:
+	if (info->engine_id)
+		rsa_engine_remove(e);
+err_engine:
+	rsa_remove();
+	return ret;
+}
+
+int rsassa_pss_sign(struct image_sign_info *info,
+	     const struct image_region region[], int region_count,
+	     uint8_t **sigp, uint *sig_len)
+{
+	RSA *rsa;
+	ENGINE *e = NULL;
+	int ret;
+
+	ret = rsa_init();
+	if (ret)
+		return ret;
+
+	if (info->engine_id) {
+		ret = rsa_engine_init(info->engine_id, &e);
+		if (ret)
+			goto err_engine;
+	}
+
+	ret = rsa_get_priv_key(info->keydir, info->keyname, e, &rsa);
+	if (ret)
+		goto err_priv;
+	ret = rsa_sign_with_key(rsa, info->checksum, region,
+				region_count, sigp, sig_len,
+				RSA_PKCS1_PSS_PADDING);
 	if (ret)
 		goto err_sign;
 
@@ -551,11 +617,11 @@ cleanup:
 /*
  * rsa_get_params(): - Get the important parameters of an RSA public key
  */
-int rsa_get_params(RSA *key, uint64_t *exponent, uint32_t *n0_invp,
+int rsa_get_params(RSA *key, uint64_t *exponent, BIGNUM **n0_invp,
 		   BIGNUM **modulusp, BIGNUM **r_squaredp)
 {
-	BIGNUM *big1, *big2, *big32, *big2_32;
-	BIGNUM *n, *r, *r_squared, *tmp;
+	BIGNUM *big1, *big2, *big64, *big2_64;
+	BIGNUM *n0, *n, *r, *r_squared, *tmp;
 	const BIGNUM *key_n;
 	BN_CTX *bn_ctx = BN_CTX_new();
 	int ret = 0;
@@ -563,14 +629,15 @@ int rsa_get_params(RSA *key, uint64_t *exponent, uint32_t *n0_invp,
 	/* Initialize BIGNUMs */
 	big1 = BN_new();
 	big2 = BN_new();
-	big32 = BN_new();
+	big64 = BN_new();
 	r = BN_new();
 	r_squared = BN_new();
 	tmp = BN_new();
-	big2_32 = BN_new();
+	big2_64 = BN_new();
+	n0 = BN_new();
 	n = BN_new();
-	if (!big1 || !big2 || !big32 || !r || !r_squared || !tmp || !big2_32 ||
-	    !n) {
+	if (!big1 || !big2 || !big64 || !r || !r_squared || !tmp || !big2_64 ||
+	    !n0 || !n) {
 		fprintf(stderr, "Out of memory (bignum)\n");
 		return -ENOMEM;
 	}
@@ -580,18 +647,18 @@ int rsa_get_params(RSA *key, uint64_t *exponent, uint32_t *n0_invp,
 
 	RSA_get0_key(key, &key_n, NULL, NULL);
 	if (!BN_copy(n, key_n) || !BN_set_word(big1, 1L) ||
-	    !BN_set_word(big2, 2L) || !BN_set_word(big32, 32L))
+	    !BN_set_word(big2, 2L) || !BN_set_word(big64, 64L))
 		ret = -1;
 
-	/* big2_32 = 2^32 */
-	if (!BN_exp(big2_32, big2, big32, bn_ctx))
+	/* big2_64 = 2^64 */
+	if (!BN_exp(big2_64, big2, big64, bn_ctx))
 		ret = -1;
 
-	/* Calculate n0_inv = -1 / n[0] mod 2^32 */
-	if (!BN_mod_inverse(tmp, n, big2_32, bn_ctx) ||
-	    !BN_sub(tmp, big2_32, tmp))
+	/* Calculate n0_inv = -1 / n[0] mod 2^64 */
+	if (!BN_mod_inverse(n0, n, big2_64, bn_ctx) ||
+	    !BN_sub(n0, big2_64, n0))
 		ret = -1;
-	*n0_invp = BN_get_word(tmp);
+	*n0_invp = n0;
 
 	/* Calculate R = 2^(# of key bits) */
 	if (!BN_set_word(tmp, BN_num_bits(n)) ||
@@ -609,10 +676,10 @@ int rsa_get_params(RSA *key, uint64_t *exponent, uint32_t *n0_invp,
 
 	BN_free(big1);
 	BN_free(big2);
-	BN_free(big32);
+	BN_free(big64);
 	BN_free(r);
 	BN_free(tmp);
-	BN_free(big2_32);
+	BN_free(big2_64);
 	if (ret) {
 		fprintf(stderr, "Bignum operations failed\n");
 		return -ENOMEM;
@@ -689,7 +756,7 @@ int rsa_add_verify_data(struct image_sign_info *info, void *keydest)
 {
 	BIGNUM *modulus, *r_squared;
 	uint64_t exponent;
-	uint32_t n0_inv;
+	BIGNUM *n0_inv;
 	int parent, node;
 	char name[100];
 	int ret;
@@ -749,7 +816,8 @@ int rsa_add_verify_data(struct image_sign_info *info, void *keydest)
 	if (!ret)
 		ret = fdt_setprop_u32(keydest, node, "rsa,num-bits", bits);
 	if (!ret)
-		ret = fdt_setprop_u32(keydest, node, "rsa,n0-inverse", n0_inv);
+		ret = fdt_add_bignum(keydest, node, "rsa,n0-inverse", n0_inv,
+				     64);
 	if (!ret) {
 		ret = fdt_setprop_u64(keydest, node, "rsa,exponent", exponent);
 	}
@@ -772,6 +840,7 @@ int rsa_add_verify_data(struct image_sign_info *info, void *keydest)
 done:
 	BN_free(modulus);
 	BN_free(r_squared);
+	BN_free(n0_inv);
 	if (ret)
 		ret = ret == -FDT_ERR_NOSPACE ? -ENOSPC : -EIO;
 err_get_params:

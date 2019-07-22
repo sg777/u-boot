@@ -245,9 +245,26 @@ config FIT_ENABLE_SHA256_SUPPORT
 	  the image contents have not been corrupted. SHA256 is recommended
 	  for use in secure applications since (as at 2016) there is no known
 	  feasible attack that could produce a 'collision' with differing
-	  input data. Use this for the highest security. Note that only the
-	  SHA256 variant is supported: SHA512 and others are not currently
-	  supported in U-Boot.
+	  input data.
+
+config FIT_ENABLE_SHA384_SUPPORT
+	bool "Support SHA384 checksum of FIT image contents"
+	select SHA384
+	default n
+	help
+	  Enable this to support SHA384 checksum of FIT image contents. A
+	  SHA384 checksum is a 384-bit (48-byte) hash value used to check that
+	  the image contents have not been corrupted.
+
+config FIT_ENABLE_SHA512_SUPPORT
+	bool "Support SHA512 checksum of FIT image contents"
+	select SHA512
+	default n
+	help
+	  Enable this to support SHA512 checksum of FIT image contents. A
+	  SHA512 checksum is a 512-bit (64-byte) hash value used to check that
+	  the image contents have not been corrupted. Use this for the highest
+	  security.
 
 config FIT_SIGNATURE
 	bool "Enable signature verification of FIT uImages"

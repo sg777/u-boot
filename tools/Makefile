@@ -107,6 +107,7 @@ dumpimage-mkimage-objs := aisimage.o \
 			socfpgaimage.o \
 			lib/sha1.o \
 			lib/sha256.o \
+			lib/sha4.o \
 			common/hash.o \
 			ublimage.o \
 			zynqimage.o \

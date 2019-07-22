@@ -10,7 +10,7 @@
  * Maximum digest size for all algorithms we support. Having this value
  * avoids a malloc() or C99 local declaration in common/cmd_hash.c.
  */
-#define HASH_MAX_DIGEST_SIZE	32
+#define HASH_MAX_DIGEST_SIZE	64
 
 enum {
 	HASH_FLAG_VERIFY	= 1 << 0,	/* Enable verify mode */
