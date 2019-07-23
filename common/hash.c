@@ -136,7 +136,7 @@ static int hash_finish_sha512(struct hash_algo *algo, void *ctx, void
 	free(ctx);
 	return 0;
 }
-
+#if 0
 static int hash_init_sha384(struct hash_algo *algo, void **ctxp)
 {
 	sha4_context *ctx = malloc(sizeof(sha4_context));
@@ -188,6 +188,7 @@ static int hash_finish_sha512(struct hash_algo *algo, void *ctx, void
 	free(ctx);
 	return 0;
 }
+#endif
 #endif
 
 static int hash_init_crc32(struct hash_algo *algo, void **ctxp)

@@ -100,14 +100,14 @@ static inline int rsassa_pss_sign(struct image_sign_info *info,
 {
 	return -ENXIO;
 }
-
+#if 0
 static inline int rsassa_pss_sign(struct image_sign_info *info,
 		const struct image_region region[], int region_count,
 		uint8_t *sigp, uint *sig_len)
 {
 	return -ENXIO;
 }
-
+#endif
 static inline int rsa_add_verify_data(struct image_sign_info *info,
 				      void *keydest)
 {

@@ -977,7 +977,7 @@ err_get_pub_key:
 
 	return ret;
 }
-
+#if 0
 int rsa_add_tkc_data(struct image_sign_info *info, void *keydest)
 {
 	BIGNUM *modulus, *r_squared;
@@ -1092,3 +1092,4 @@ err_get_pub_key:
 
 	return ret;
 }
+#endif

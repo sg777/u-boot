@@ -30,11 +30,11 @@ host-csingle	:= $(foreach m,$(__hostprogs), \
 
 # C executables linked based on several .o files
 host-cmulti	:= $(foreach m,$(__hostprogs),\
-		   $(if $($(m)-cxxobjs),,$(if $($(m)-objs),$(m))))
+		   $(if $($(m)-cxxobjs),,$(if $($(m)-objs),$(m)))) -ldl
 
 # Shared object libraries
 host-shared	:= $(foreach m,$(__hostprogs),\
-		   $(if $($(m)-sharedobjs),$(m))))
+		   $(if $($(m)-sharedobjs),$(m)))) -ldl
 
 # Object (.o) files compiled from .c files
 host-cobjs	:= $(sort $(foreach m,$(__hostprogs),$($(m)-objs)))
@@ -92,7 +92,7 @@ hostcxx_flags  = -Wp,-MD,$(depfile) $(__hostcxx_flags)
 # host-csingle -> Executable
 quiet_cmd_host-csingle 	= HOSTCC  $@
       cmd_host-csingle	= $(HOSTCC) $(hostc_flags) -o $@ $< \
-	  	$(HOST_LOADLIBES) $(HOSTLOADLIBES_$(@F))
+	  	$(HOST_LOADLIBES) $(HOSTLOADLIBES_$(@F)) -ldl
 $(host-csingle): $(obj)/%: $(src)/%.c FORCE
 	$(call if_changed_dep,host-csingle)
 
@@ -101,7 +101,7 @@ $(host-csingle): $(obj)/%: $(src)/%.c FORCE
 quiet_cmd_host-cmulti	= HOSTLD  $@
       cmd_host-cmulti	= $(HOSTCC) $(HOSTLDFLAGS) -o $@ \
 			  $(addprefix $(obj)/,$($(@F)-objs)) \
-			  $(HOST_LOADLIBES) $(HOSTLOADLIBES_$(@F))
+			  $(HOST_LOADLIBES) $(HOSTLOADLIBES_$(@F)) -ldl
 $(host-cmulti): FORCE
 	$(call if_changed,host-cmulti)
 $(call multi_depend, $(host-cmulti), , -objs)
@@ -109,7 +109,7 @@ $(call multi_depend, $(host-cmulti), , -objs)
 # Create .o file from a single .c file
 # host-cobjs -> .o
 quiet_cmd_host-cobjs	= HOSTCC  $@
-      cmd_host-cobjs	= $(HOSTCC) $(hostc_flags) -c -o $@ $<
+      cmd_host-cobjs	= $(HOSTCC) $(hostc_flags) -c -o $@ $< -ldl
 $(host-cobjs): $(obj)/%.o: $(src)/%.c FORCE
 	$(call if_changed_dep,host-cobjs)
 
@@ -119,14 +119,14 @@ quiet_cmd_host-cxxmulti	= HOSTLD  $@
       cmd_host-cxxmulti	= $(HOSTCXX) $(HOSTLDFLAGS) -o $@ \
 			  $(foreach o,objs cxxobjs,\
 			  $(addprefix $(obj)/,$($(@F)-$(o)))) \
-			  $(HOST_LOADLIBES) $(HOSTLOADLIBES_$(@F))
+			  $(HOST_LOADLIBES) $(HOSTLOADLIBES_$(@F)) -ldl
 $(host-cxxmulti): FORCE
 	$(call if_changed,host-cxxmulti)
 $(call multi_depend, $(host-cxxmulti), , -objs -cxxobjs)
 
 # Create .o file from a single .cc (C++) file
 quiet_cmd_host-cxxobjs	= HOSTCXX $@
-      cmd_host-cxxobjs	= $(HOSTCXX) $(hostcxx_flags) -c -o $@ $<
+      cmd_host-cxxobjs	= $(HOSTCXX) $(hostcxx_flags) -c -o $@ $< -ldl
 $(host-cxxobjs): $(obj)/%.o: $(src)/%.cc FORCE
 	$(call if_changed_dep,host-cxxobjs)
 

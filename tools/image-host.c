@@ -934,6 +934,7 @@ int fit_add_tkc_data(const char *keydir, void *keydest, void *fit)
 	return 0;
 }
 
+#if 0
 int fit_add_tkc_data(const char *keydir, void *keydest, void *fit)
 {
 	struct image_sign_info info;
@@ -982,7 +983,7 @@ int fit_add_tkc_data(const char *keydir, void *keydest, void *fit)
 
 	return 0;
 }
-
+#endif
 #ifdef CONFIG_FIT_SIGNATURE
 int fit_check_sign(const void *fit, const void *key)
 {
